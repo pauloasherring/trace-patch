@@ -3,15 +3,17 @@
 # Based on cppclean, by Neal Norwitz.
 # This tool will patch the functions it find with:
 #     A macro call at the begining (see 'inprint' below);
-#     A macro call at each return point, either because of a return clause or because a void function came to an end (see 'ouprint' below). 
+#     A macro call at each return point, either because of a return clause or because a void function came to an end (see 'ouprint' below).
 #
-# Usage: 
-#       patchCode file1.cpp file2.c 
+# Usage:
+#       patchCode file1.cpp file2.c
 #       This causes the patchCode to patch enlisted files.
 #
 #       patchCode
 #       This causes patchCode to find *.c, *.cpp and *.cc in the current folder and process them.
 #
+# Limitations:
+#       D'tors are assumed to end without return clauses.
 # Original cppclean copyright notice:
 # Copyright 2007 Neal Norwitz
 # Portions Copyright 2007 Google Inc.
@@ -28,8 +30,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-outprint = 'TRACE_ME_OUT;\n'
-inprint = 'TRACE_ME_IN;\n'
+outprint = 'TRACE_ME_OUT;\t//<<==--TracePoint!\n'
+inprint = 'TRACE_ME_IN;\t//<<==--TracePoint!\n'
 
 import argparse
 import fnmatch
@@ -46,6 +48,20 @@ from cpp import utils
 
 def insert (source_str, insert_str, pos):
     return source_str[:pos] + insert_str + source_str[pos:]
+
+def calc_insert_point(source, body, part):
+    if len(body) >= part:
+        startOffset = body[part].start
+        ret = startOffset
+        while source[ret] != '\n':
+            ret -= 1
+        newline = ret
+        ret += 1
+        while source[ret] == ' ':
+            ret += 1
+        return ret-newline-1
+    else:
+        return 4
 
 def remove_lines (source_str, remove_lines):
     for rem_line in remove_lines:
@@ -72,7 +88,7 @@ def calc_start_of_line(source, bodylist):
         item_count = len(bodylist) - 2
     else:
         item_count = len(bodylist) - 1
-    
+
     while item_count != 0:
         if bodylist[item_count].name == ';':
             break
@@ -132,7 +148,7 @@ def main():
                     for subitem in item.split(' '):
                         split_file_list.append(subitem)
                 filelist = split_file_list
-    
+
     status = 0
     for filename in filelist:
         if args.verbose:
@@ -146,15 +162,39 @@ def main():
             rev_entire_ast = reversed(entire_ast)
             for item in rev_entire_ast:
                 if (isinstance( item, ast.Method) or isinstance( item, ast.Function) and (item.body is not None)) :
-                    revbody = reversed(item.body)
-                    if item.return_type is not None:
-                        if 'void' in item.return_type.name:
-                            if 'return' not in item.body[-2].name:
-                                source = insert(source, '\n'+ ' '*4 + outprint  , item.body[-1].end)
-                    for part in revbody:
-                        if 'return' in part.name:
-                            source = insert(source, outprint + ' '*(calc_ident(source, part.start)-1), part.start)
-                    source = insert(source, inprint + ' '*(calc_ident(source, item.body[0].start)-1), part.start)
+                    if len(item.body) > 2 :
+                        revbody = reversed(item.body)
+
+                        # Corner case: functions without return types
+                        if item.return_type is not None:
+                            # Corner case: void functions
+                            if 'void' == item.return_type.name:
+                                if 'return' != item.body[-2].name:
+                                    # Function does not end with return clause
+                                    spaces = calc_insert_point(source, item.body, len(item.body)-1)
+                                    source = insert(source, '\n'+ ' '*spaces + outprint  , item.body[-1].end)
+                            if isinstance( item, ast.Method):
+                                # Only classes can have c/d'tor and the the in_class member
+                                # Corner case: c/d'tor
+                                if item.in_class is not None:
+                                    if item.name == item.in_class[0].name:
+                                        #ctor
+                                        if 'return' != item.body[-2].name:
+                                            spaces = calc_insert_point(source, item.body, len(item.body)-1)
+                                            source = insert(source, '\n'+ ' '*spaces + outprint  , item.body[-1].end)
+                                    elif item.name == '~' + item.in_class[0].name:
+                                        #dtor
+                                        if 'return' != item.body[-2].name:
+                                            spaces = calc_insert_point(source, item.body, len(item.body)-1)
+                                            source = insert(source, '\n'+ ' '*spaces + outprint  , item.body[-1].end)
+                        # Regular case: For every return clause, add out print
+                        for part in revbody:
+                            if 'return' == part.name:
+                                source = insert(source, outprint + ' '*(calc_ident(source, part.start)-1), part.start)
+                        # Regular case: beginning of the function
+                        source = insert(source, inprint + ' '*(calc_ident(source, item.body[0].start)-1), part.start)
+                    else:
+                        print (f'Warning: too little body. Skipping {item.name}')
         except tokenize.TokenError as exception:
             if args.verbose:
                 print('{}: token error: {}'.format(filename, exception),
@@ -164,9 +204,10 @@ def main():
             if not args.quiet:
                 print('{}: parsing error: {}'.format(filename, exception), file=sys.stderr)
             continue
-        if args.unpatch == True: 
+        if args.unpatch == True:
             source = remove_lines(source, [inprint, outprint])
-        fp = open(filename+'.trk', 'w')
+        #fp = open(filename+'.trk', 'w')
+        fp = open(filename, 'w')
         fp.write(source)
         fp.close()
     return status
