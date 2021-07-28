@@ -39,6 +39,8 @@ defprint = """
 
 """
 
+fileExts = ['*.c','*.cpp','*.cc']
+
 import argparse
 import fnmatch
 import os
@@ -219,10 +221,10 @@ def main():
     parser.add_argument('--verbose', action='store_true', help='print verbose messages')
     parser.add_argument('--quiet', '-q', action='store_true', help='ignore parse errors')
     args = parser.parse_args()
+    filelist = []
     if len(args.files ) == 0 :
-        filelist = glob.glob('.\\**\\*.c', recursive=args.recursive)
-        filelist += glob.glob('.\\**\\*.cpp', recursive=args.recursive)
-        filelist += glob.glob('.\\**\\*.cc', recursive=args.recursive)
+        for fileext in fileExts:
+            filelist += glob.glob('.\\**\\'+fileext, recursive=args.recursive)
     else:
         # For Python 2 where argparse does not return Unicode.
         args.files = [filename.decode(sys.getfilesystemencoding())
