@@ -16,8 +16,8 @@ python3 patchCode.py [--unpatch --recursive] [filename1 filename2]
 If no filename is given, it will glob all the \*.c, \*.cpp, and \*.cc files in the current folder.
 
 Flags:
---unpatch: flag to remove the tracing calls;
---recursive: flag to recurse through the current directory;
+`--unpatch` flag to remove the tracing calls;
+`--recursive` flag to recurse through the current directory;
 
 # Tweaking the script's code
 
