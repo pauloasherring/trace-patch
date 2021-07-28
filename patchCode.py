@@ -32,7 +32,12 @@
 
 outprint = 'TRACE_ME_OUT;\t//<<==--TracePoint!\n'
 inprint = 'TRACE_ME_IN;\t//<<==--TracePoint!\n'
-defprint = 'TK'
+defprint = """
+#include <sys/time.h>
+#define TRACE_ME_IN struct timeval tp ; gettimeofday ( &tp , nullptr ); printf("[%4ld.%4ld] In: %s\\n",tp.tv_sec , tp.tv_usec,__PRETTY_FUNCTION__);
+#define TRACE_ME_OUT gettimeofday ( &tp , nullptr ); printf("[%4ld.%4ld] Out: %s\\n",tp.tv_sec , tp.tv_usec,__PRETTY_FUNCTION__);
+
+"""
 
 import argparse
 import fnmatch
@@ -49,7 +54,11 @@ from cpp import utils
 
 def insert (source_str, insert_str, pos):
     """ Inserts insert_str at source_str[pos], displacing the rest."""
-    return source_str[:pos] + insert_str + source_str[pos:]
+    if pos == 0:
+        source_str = insert_str + source_str[pos:]
+    else:
+        source_str = source_str[:pos] + insert_str + source_str[pos:]
+    return source_str
 
 
 def remove_lines (source_str, remove_lines):
@@ -147,7 +156,7 @@ def do_patch(filelist):
             if defprint in source or inprint in source or outprint in source:
                 print(f'Warning: Origin files seems to be already patched. I will not patch {filename}')
                 continue
-
+            source = insert(source,defprint,0)
             builder = ast.builder_from_source(source, filename, list(), list(), quiet=args.quiet)
             entire_ast = list([_f for _f in builder.generate() if _f])
             rev_entire_ast = reversed(entire_ast)
