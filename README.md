@@ -19,7 +19,7 @@ Flags:
 --unpatch: flag to remove the tracing calls;
 --recursive: flag to recurse through the current directory;
 
-#Tweaking the script's code
+# Tweaking the script's code
 
 If you need to patch files with extensions such as \*.cc or any C/C++ not covered, you can edit the variable `fileExts` to include whatever you see fit.
 
